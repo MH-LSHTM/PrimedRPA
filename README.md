@@ -26,7 +26,7 @@ chmod +x ./PrimedRPA.py
 #Save path to file
 Path=$(pwd)
 
-FileName="PrimedRPA.py'"
+FileName="/PrimedRPA.py'"
 
 aliastext="alias PrimedRPA='"
 
