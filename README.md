@@ -52,4 +52,5 @@ Update this output with the final version.
 ## Additional Notes 
 
 Clustalo - Is not required if you are using a single input fasta file only.
+
 BLAST - Is not required if a background binding check is not necessary. 
