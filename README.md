@@ -24,7 +24,7 @@ Installation steps
 ```
 git clone https://github.com/MH-LSHTM/PrimedRPA.git
 cd PrimedRPA
-bash PrimedRPA_Installation.sh
+bash Install.sh
 
 ```
 ## PrimedRPA Overview
