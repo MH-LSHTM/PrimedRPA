@@ -96,10 +96,15 @@ The choice to or to not run a background binding check will affect the output ob
 However, if you run a background binding check then the following directories & files shall be generated:
 
 ./<Run_Name>_Results
+
 	./<Run_Name>_BLAST_DB/ - directory containing the local BLAST database created. 
+	
 	./<Run_Name>_BLAST_Outputs/ - directory containing the alignment outputs generated for each of the primers & probe sets. 
-	./<Run_Name>_Oligo_Fasta/ - POSSIBLY BUILD THIS IN TO DELETE AS NOT REALLY NECESSARY
-	.<Run_Name>_Aligned_Input.fasta - This is the output file generated from the clustalo alignment of the input file.
+	
+	./<Run_Name>_Oligo_Fasta/ - Primers and probes in fasta format.
+	
+	./<Run_Name>_Aligned_Input.fasta - This is the output file generated from the clustalo alignment of the input file.
+	
 	./<Run_Name>_PrimedRPA_Output_Sets.csv - This is the final output containing the Primed RPA sets of interest. 
 
 
