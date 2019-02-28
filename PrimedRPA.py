@@ -1,19 +1,22 @@
 #! /usr/bin/env python3
 
-#####################################################################
-#  PrimedRPA: RPA Primer and Probe Set Finder                       #
-#  Higgins M et al. Submitted. 2018                                 #
-#                                                                   #
-#  Dependencies:                                                    #
-#     Clustal Omega (Download from: http://www.clustal.org/omega/)  #
-#     Python 3.6                                                    #
-#     Pandas 0.20.3                                                 #
-#     sys 3.6.3                                                     #
-#     Bio 1.70                                                      #
-#####################################################################
+##########################################################################################################################
+#  PrimedRPA: RPA Primer and Probe Set Finder                      														 #
+#  Higgins M et al. Submitted. 2018                                 													 #
+#                                                                   													 #
+#  Dependencies:                                                    												     #
+#     Clustal Omega (Download from: http://www.clustal.org/omega/)  													 #
+#	  BLASTn (Download from: https://blast.ncbi.nlm.nih.gov/Blast.cgi?CMD=Web&PAGE_TYPE=BlastDocs&DOC_TYPE=Download)	 #
+#     Python 3.6                                                    													 #
+#     Pandas 0.20.3                                                 													 #
+#     sys 3.6.3                                                     													 #
+#     Bio 1.70                                                      													 #
+#	  glob2 0.5																											 #
+##########################################################################################################################
 
 import os
 import sys
+import glob
 
 print('-------------------------------------------')
 print('----------------PrimedRPA------------------')
@@ -42,7 +45,6 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Align.Applications import ClustalOmegaCommandline
 
 parametersFile = sys.argv[1]
-defaultOutputFile = 'Output.fasta'
 
 if os.path.isfile(parametersFile):
 	# Parse parameters file, assign variables accordingly.
@@ -54,7 +56,7 @@ if os.path.isfile(parametersFile):
 			h = n.strip('>')
 			iu.append(h)
 	u = iu[1:]
-	Targetsequencefile = str(u[0])
+	Targetsequencefile = str(u[1])
 	if os.path.isfile(Targetsequencefile):
 		fileInfo = os.stat(Targetsequencefile)
 		fileSize = fileInfo.st_size
@@ -63,19 +65,26 @@ if os.path.isfile(parametersFile):
 		sys.exit()
 	NumberofConCatseq = open(Targetsequencefile,'r').read().count('>')
 	singleOrMultipleFiles = 'y' if NumberofConCatseq == 1 else 'n'
-	UserConservedDecimal = int(u[1])
-	DesiredPrimerLength = int(u[2])
-	DesiredProbeLength = int(u[3])
-	AmpliconSize = int(u[4])
-	MinimumGCcontentFilter = int(u[5])
-	MaximumGCcontentFilter = int(u[6])
-	PrimerProbeSelfComplementaryBinding = int(u[7]) #This will be done in base pairs e.g 4 bp
-	Lengthofregionswhichcantoleratesecondarystructure = int(u[8])#This will be done in base pairs e.g 4 bp
-	BackgroundCheckRequired = str(u[9])
-	NumberOfBackgroundMatchesWhichCanBeTolerated = int(u[10])
-	SplitFileSize = int(u[11])
+	RunName = str(u[0])
+
+	if len(glob.glob('{}*'.format(RunName))) != 0:
+		print('Error: Please choose a different Run Name in the parameters file')
+		sys.exit()
+
+	UserConservedDecimal = int(u[2])
+	DesiredPrimerLength = int(u[3])
+	DesiredProbeLength = int(u[4])
+	AmpliconSize = int(u[5])
+	MinimumGCcontentFilter = int(u[6])
+	MaximumGCcontentFilter = int(u[7])
+	PrimerProbeSelfComplementaryBinding = int(u[8]) #This will be done in base pairs e.g 4 bp
+	Lengthofregionswhichcantoleratesecondarystructure = int(u[9])#This will be done in base pairs e.g 4 bp
+	BackgroundCheckRequired = str(u[10])
+	PriorBackgroundPercentageCutOff = int(u[11])
 	BackgroundGenomeFiles = u[12:]
 	NumberOfSeqinINputfile = NumberofConCatseq + 1
+
+	BackgroundPercentageCutOff = int(u[11])/100
 
 	print(('Received Parameters:\n'+
 		'Input Fasta: {Targetsequencefile}\n'+ 
@@ -88,8 +97,7 @@ if os.path.isfile(parametersFile):
 		'Tolerated Length (self-binding): {PrimerProbeSelfComplementaryBinding:,}\n'+
 		'Tolerated Length (secondary structure): {Lengthofregionswhichcantoleratesecondarystructure:,}\n'+
 		'Performing Background Binding Check: {BackgroundCheckRequired}\n'+
-		'Tolerated Bumber of Background Binding Nucleotides: {NumberOfBackgroundMatchesWhichCanBeTolerated}\n'+
-		'Split File Size: {SplitFileSize:,}\n'+
+		'Background Binding Percentage Cut-Off: {PriorBackgroundPercentageCutOff}\n'
 		'Background Check Files: {BackgroundGenomeFiles}\n').format(**globals()))
 else:
 	print("Error: Parameters file not found. Please ensure that '{}'' is in the current working directory.".format(parametersFile))
@@ -99,10 +107,10 @@ if fileSize > 4000000:
 	print("Input file to large, reduce its size to below 4MB")
 	sys.exit()
 
-#print("Desired amplicon length: {}".format(AmpliconSize))
-
 TargetSequenceListFormat = []
 TargetSequenceListFormat.append(Targetsequencefile)
+
+defaultOutputFile = '{}_Aligned_Input.fasta'.format(RunName)
 
 # Wrapper for clustal omega
 def RunningClustalo1(ListOfFileNames, overwriteOutput=True):
@@ -141,64 +149,50 @@ def getComplement(seq,reverse=False,rule='N2N'):
 
 def CheckingAlignedOutputFile(Outputfile,desiredAmpliconLength,singleOrMultipleFiles,NumberOfSeqinINputfile,UserConservedPercentage):
 	listofconservedblocknumbers = []
-	UserConservedDecimal = UserConservedPercentage/100
+	UserConservedDecimal = (UserConservedPercentage/100) * (desiredAmpliconLength+20)
 	lineofinterest = NumberOfSeqinINputfile + 1
-	print('Line of interest: {}'.format(lineofinterest))
 	Openfile = open(Outputfile,"r")
 	lineslist = Openfile.readlines()
 	precleanedlineslist = lineslist[2:]
 
+	newlist = []
 	psclist = []
-	for seq in precleanedlineslist:
-		positionofspace = seq.find(' ')
-		bugfix1 = seq[positionofspace:]
-		psclist.append(''.join([base.upper() for base in bugfix1 if base.upper() in ['A','C','G','T']]))
 
-	Numberofblocks = int((len(precleanedlineslist)/lineofinterest))
+	positionofspace = precleanedlineslist[1].find(' ')
+	yuouy = precleanedlineslist[1][positionofspace:].count(' ')
+
+	for seq in precleanedlineslist:
+		bugfix1 = seq[(positionofspace+yuouy):].replace('\n','')
+		newlist.append(bugfix1)
+
+		psclist.append(''.join([base.upper() for base in bugfix1 if base.upper() in ['A','C','G','T']])) # Does tolerate nucleotide wildcards, need to build this in. 
+
+	Numberofblocks = int((len(newlist)/lineofinterest))
 	ListofNumbersoflinesofinterest = [x * lineofinterest for x in range(1, Numberofblocks)]
 
-	Alignedlinesofinterest = []
-	for linepositionnumberfloat in ListofNumbersoflinesofinterest:
-		Alignedlinesofinterest.append(precleanedlineslist[(int(linepositionnumberfloat)-1)])
+	Subsetinterestlist = []
+	for hhg in ListofNumbersoflinesofinterest:
+		Subsetinterestlist.append(newlist[hhg-NumberOfSeqinINputfile])
 
-	Conservedblocknumber = []
-	cpcounter = 0 
-	for astricesline in Alignedlinesofinterest:
-		
-		alcounter = 0 
-		pcleanedastricesline = astricesline.replace("\n","")
-		cleanedastricesline = pcleanedastricesline.strip()
-		lengthofcleanedastricesline = len(cleanedastricesline)
-		numberofastricesrequired = int(lengthofcleanedastricesline*UserConservedDecimal)
-		
-		for position in cleanedastricesline:
-			if position == "*":
-				alcounter += 1
+	targetSequenceofinterest=''.join(Subsetinterestlist)
+	FragmentsoftargetSequenceofintereste = [targetSequenceofinterest[i:i+(desiredAmpliconLength+20)] for i in range(len(targetSequenceofinterest)-(desiredAmpliconLength+19))]
 
-		cpcounter += 1
 
-		if alcounter >= numberofastricesrequired:
-			Conservedblocknumber.append(cpcounter)
-
-	lengthofconservedblocknumberlist = len(Conservedblocknumber)
-
-	uno = list(range(1,lengthofconservedblocknumberlist))
+	astriceinterestlist = []
+	for whg in ListofNumbersoflinesofinterest:
+		astriceinterestlist.append(newlist[whg-1])
+	astriceinterestsequence=''.join(astriceinterestlist)
 
 	listofconservedregions = []
-	nextblockcounter = -1
 
-	for blockcounter in Conservedblocknumber:
-		conservedsequencestring = "" + psclist[(blockcounter * lineofinterest) - 1]
-		nextblockcounter += 1
-		for nextnumber in uno:
-			checknextnumber = blockcounter + nextnumber
-			nextNnextB = nextnumber + nextblockcounter
-			if nextNnextB < lengthofconservedblocknumberlist:
-				if checknextnumber == Conservedblocknumber[nextNnextB]:
-					conservedsequencestring += psclist[(checknextnumber * lineofinterest) - 2]
-			else:
-				break
-		listofconservedregions.append(conservedsequencestring)
+	Fragmentsofastriceinterestsequence = [astriceinterestsequence[i:i+(desiredAmpliconLength+20)] for i in range(len(astriceinterestsequence)-(desiredAmpliconLength+19))]
+	faiscounter = 0
+	for fais in Fragmentsofastriceinterestsequence:
+		if fais.count('*') >= UserConservedDecimal:
+			if '-' not in FragmentsoftargetSequenceofintereste[faiscounter]:
+				listofconservedregions.append(FragmentsoftargetSequenceofintereste[faiscounter])
+		faiscounter += 1
+
 	return listofconservedregions
 
 def CheckingNormalOutputFile(Outputfile,desiredAmpliconLength,singleOrMultipleFiles):
@@ -270,18 +264,17 @@ for PPSet in PrimerProbeBindingSiteSets:
 		PBS = seqs[1]
 		RPBS = seqs[2]
 		CombinedSeq = "%s%s%s" % (FPBS,PBS,RPBS)
-		#print(CombinedSeq)
 		for base in CombinedSeq:
 			if base == "G" or base == "C":
 				SN = SN + 1
 		if seqs not in GCFilteredSets:
-			if ((MinimumGCcontentFilter/100)*118) <= SN <= ((MaximumGCcontentFilter/100)*118):
+			if ((MinimumGCcontentFilter/100)*((DesiredPrimerLength*2)+DesiredProbeLength)) <= SN <= ((MaximumGCcontentFilter/100)*((DesiredPrimerLength*2)+DesiredProbeLength)):
 				GCFilteredSets.append(seqs)
 print("Potential primer pairs after GC content filter: {:,}".format(len(GCFilteredSets)))
 
 # Filtering out sets with repetitive regions
 PriorRRFilteredPPBindingSiteList = []
-repSet = ["NNN", "AAAAAAA", "CCCCCCC", "TTTTTTT", "GGGGGGG"]
+repSet = ["NNN", "AAAAA", "CCCCC", "TTTTT", "GGGGG"]
 
 for forwardprimer, probe, reverseprimer in GCFilteredSets:
 	# Check for a repetitive region
@@ -345,7 +338,7 @@ for ForwardPrimer, Probe, ReversePrimer in ActualPPSeqSets:
 	if not skip and ppset not in SelfbindingFilteredSets:
 			SelfbindingFilteredSets.append(ppset)
 print("Number of sets remaining after self-binding filter: {:,}".format(len(SelfbindingFilteredSets)))
-#print(SelfbindingFilteredSets)
+
 
 # Filter based on secondary structure
 SecondaryStructureFilteredPPsets = []
@@ -398,7 +391,7 @@ if BackgroundCheckRequired.lower() == "no":
 	Table3 = {"Forward_Primer":FPStartUncheckedList,"Probe":PrStartUncheckedList, "Reverse_Primer":RPStartUncheckedList}
 	DF3 = pd.DataFrame(data=Table3)
 	print("Writing Primer and Probe set list to '{}'".format("RPA_Primers_and_Probes_Set_List.xlsx"))
-	writer3 = pd.ExcelWriter("_RPA_Primers_and_Probes__Set_List.xlsx")
+	writer3 = pd.ExcelWriter('{}_PrimedRPA_Output_Sets.xlsx'.format(RunName)) 
 	DF3.to_excel(writer3,"Sheet1")
 	writer3.save()
 	print("RPA Primers & Probes Set List Generated, No Background Check Performed.")
@@ -406,187 +399,257 @@ if BackgroundCheckRequired.lower() == "no":
 		os.remove(defaultOutputFile)
 	quit()
 
+
 else: # Given that we have background specific functions, let's only define them if they're needed.
-	def CreatingSplitFiles(CleanedBackgroundFile,RoundedUpFileSplitRequired,NumberOfLinesPerDividedFile,targetSequence,TargetSequenceName):
-		with open("BSSplitFile1" + TargetSequenceName + ".fasta","w") as BSSplitFile:
-			BSSplitFile.write(">PrimerOrProbe\n"+targetSequence+'\n>BackgroundSequence\n')
-			seqlines = CleanedBackgroundFile[1:NumberOfLinesPerDividedFile]
-			for line in seqlines:
-				BSSplitFile.write(line + '\n')
-
-		for i in range(2,RoundedUpFileSplitRequired):
-			seqlines = CleanedBackgroundFile[(NumberOfLinesPerDividedFile*(i-1)):(NumberOfLinesPerDividedFile*i)]
-			with open(("BSSplitFile" + str(i) + TargetSequenceName + ".fasta"),  "w") as BSSFile:
-				BSSFile.write(">PrimerOrProbe\n"+targetSequence+"\n>BackgroundSequence\n")
-				for seq in seqlines:
-					BSSFile.write(seq + '\n')
-		
-	def CheckingOutPutFiles(ListOfOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile):		
-		listofmatchesprimers =[]
-		Lineofinterest = 4
-
-		Numberoflinesinblock = 4
-		for outputFile in ListOfOutputFileNames:
-			Openfile = open(outputFile,"r")
-			lineslist = Openfile.readlines()
-			precleanedlineslist = lineslist[2:] ##chsne
-
-			Numberofblocks = int(((len(precleanedlineslist))/Numberoflinesinblock))
-			ListofNumbersoflinesofinterest = [x * Lineofinterest for x in range(1, Numberofblocks)]
-
-			linesofinterest = []
-			for linepositionnumberfloat in ListofNumbersoflinesofinterest:
-				linesofinterest.append(precleanedlineslist[(int(linepositionnumberfloat)-1)])
-
-			linenumber = 0
-			MatchingLinesList = []
-			for line in linesofinterest:
-				cleanedline = line.replace("\n","")
-				if linenumber < (Numberofblocks - 2):
-					linenumber += 1
-					nextline = linesofinterest[linenumber]
-					cleannextline = nextline.replace("\n","")
-					doubleLineString = line + cleannextline
-
-					if doubleLineString.count("*") > NumberOfBackgroundMatchesWhichCanBeTolerated:
-						listofmatchesprimers.append("BAD")
-		return listofmatchesprimers
 
 
-	def ScoringSets(ListOfOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile):		
-		listofmatchesprimers =[]
-		Lineofinterest = 4
-		Numberoflinesinblock = 4
-		SetScore = 0
-		for outputFile in ListOfOutputFileNames:
-			Openfile = open(outputFile,"r")
-			lineslist = Openfile.readlines()
-			precleanedlineslist = lineslist[2:] ##chsne
+	def BLASTCScoreGeneration(Dataframe, referenceprimerorprobe, outputCSVSetNumber, typeoligo):
 
-			Numberofblocks = int(((len(precleanedlineslist))/Numberoflinesinblock))
-			ListofNumbersoflinesofinterest = [x * Lineofinterest for x in range(1, Numberofblocks)]
+		# The first section of this function is to generate the length adjusted reference bit score
+		FullReferenceID = 'Oligo_Header_'+typeoligo+str(outputCSVSetNumber) 
+	
+		ReferenceOligoDF = Dataframe[Dataframe[0]==FullReferenceID]
+		ListConverted_ReferencePrimerDF = ReferenceOligoDF.values.tolist()
 
-			linesofinterest = []
-			for linepositionnumberfloat in ListofNumbersoflinesofinterest:
-				linesofinterest.append(precleanedlineslist[(int(linepositionnumberfloat)-1)])
-			linenumber = 0
-			MatchingLinesList = []
-			for line in linesofinterest:
-				cleanedline = line.replace("\n","")
-				SetScore += cleanedline.count("*")
-		return SetScore
+		IteminsideList = ListConverted_ReferencePrimerDF[0]
+		ReferenceBitScore = IteminsideList[1]
+		ReferencePrimerLength = len(referenceprimerorprobe)
+		LengthAdjustedBitScore = ReferenceBitScore/ReferencePrimerLength
+		#print(LengthAdjustedBitScore)
 
-	def BackgroundBindingCheck(backgroundfile,filteredPPset,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile,SplitFileSize):
-		FinalPassedPrimerAndProbeSets = []
+		# This generates the  DF which only contains the score associated with background sequences and no other oligo sequences
+		BackgroundSeqOnlyDF = Dataframe[~Dataframe[0].str.startswith('Oligo_Header_')]
+		BackgroundSeq_BitScore_List = BackgroundSeqOnlyDF[1].tolist()
 
-		for PPSet in filteredPPset:
-			#print(PPSet)
-			ForwardPrimer = PPSet[0]
-			Probe = PPSet[1]
-			ReversePrimer = PPSet[2]
-			#ForwardPrimer, Probe, ReversePrimer = PPSet
-			FowardPrimerName, ProbeName, ReversePrimerName = "ForwardPrimer", "Probe", "ReversePrimerName"
-			fileInfo = os.stat(backgroundfile)
-			fileSize = fileInfo.st_size
-			FileSplitRequired = (fileSize/SplitFileSize)
-			#print(FileSplitRequired)
-			RoundedUpFileSplitRequired = math.ceil(FileSplitRequired)
-			#print(RoundedUpFileSplitRequired)
+		if len(BackgroundSeq_BitScore_List) != 0: # This is to account for if Blastn finds no sort of alignment between the oligo and background sequences. 
 
-			with open(backgroundfile,"r") as backgroundseqfile:		
-				CleanedBackgroundFile = []
-				for line in backgroundseqfile.readlines():
-					if ">" not in line:
-						CleanedBackgroundFile.append(line.strip('\n'))
+			SumOfAdjustedBitScoreDifferences = 0 
 
-			NumberOfLinesPerDividedFile = int( len(CleanedBackgroundFile) / RoundedUpFileSplitRequired )
+			DirectMatchFailSafe = 0 #This is to account for if a complete direct match is found.
 
-			CreatingFilesToCompareForwardPrimers = CreatingSplitFiles(CleanedBackgroundFile,RoundedUpFileSplitRequired,NumberOfLinesPerDividedFile,ForwardPrimer,FowardPrimerName)
-			CreatingFilesToCompareProbe = CreatingSplitFiles(CleanedBackgroundFile,RoundedUpFileSplitRequired,NumberOfLinesPerDividedFile,Probe,ProbeName)
-			CreatingFilesToCompareReversePrimers = CreatingSplitFiles(CleanedBackgroundFile,RoundedUpFileSplitRequired,NumberOfLinesPerDividedFile,ReversePrimer,ReversePrimerName)
+			for BackgroundSeqBitScore in BackgroundSeq_BitScore_List:
+				BackgroundSeqAdjustedBitScore = BackgroundSeqBitScore/ReferencePrimerLength
+				#print(BackgroundSeqAdjustedBitScore)
 
-			ListOfFileNames = []
-			for file in os.listdir():
-				if "BSS" in file and file.endswith(".fasta"):
-					ListOfFileNames.append(str(file))
+				if BackgroundSeqAdjustedBitScore == LengthAdjustedBitScore:
+					DirectMatchFailSafe += 1
 
-			RunningClustalo1(ListOfFileNames, overwriteOutput=False)
-			ListOfOutputFileNames = [f for f in os.listdir() if 'Output' in f and f != defaultOutputFile]
-			ListOfForwardPrimerOutputFileNames = [v for v in os.listdir() if 'ForwardPrimerOutput' in v and v != defaultOutputFile]
-			ListOfProbeOutputFileNames = [l for l in os.listdir() if 'ProbeOutput' in l and l != defaultOutputFile]
-			ListOfReversePrimerOutputFileNames = [p for p in os.listdir() if 'ReversePrimerNameOutput' in p and p != defaultOutputFile]
-			BackgroundBindingCheck = CheckingOutPutFiles(ListOfOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile)
+				else:
+					SumOfAdjustedBitScoreDifferences = SumOfAdjustedBitScoreDifferences + BackgroundSeqAdjustedBitScore
 
-			if len(BackgroundBindingCheck) == 0:
-				FPScore = ScoringSets(ListOfForwardPrimerOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile)
-				PrScore = ScoringSets(ListOfProbeOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile)
-				RPScore = ScoringSets(ListOfReversePrimerOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile)
-				OverallScore = ScoringSets(ListOfOutputFileNames,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile)
 
-				PPSet.append(FPScore)
-				PPSet.append(PrScore)
-				PPSet.append(RPScore)
-				PPSet.append(OverallScore)
-				FinalPassedPrimerAndProbeSets.append(PPSet)
-				#print(FinalPassedPrimerAndProbeSets)
+			if DirectMatchFailSafe == 0:
 
-			for x in ListOfFileNames:
-				os.remove(x)
-			for y in ListOfOutputFileNames:
-				os.remove(y)
+				PercentageObtained = SumOfAdjustedBitScoreDifferences/(LengthAdjustedBitScore*len(BackgroundSeq_BitScore_List))
 
-		print("Background check with '{}' complete.".format(backgroundfile))
-		print("Number of primer & probe sets passed: {}".format(len(FinalPassedPrimerAndProbeSets)))
-		return FinalPassedPrimerAndProbeSets
+			else:
+				PercentageObtained = 1
 
-	# Running background checks against multiple fasta files
-	for background in BackgroundGenomeFiles:
-		SecondaryStructureFilteredPPsets = BackgroundBindingCheck(background,SecondaryStructureFilteredPPsets,NumberOfBackgroundMatchesWhichCanBeTolerated,NumberOfSeqinINputfile,SplitFileSize)
+		else:
+			PercentageObtained = 0
 
-	if len(SecondaryStructureFilteredPPsets) == 0:
-		print("No Suitable Sets Found")
+		PercentageObtained=PercentageObtained*100
+		# This returns the average percentage (as a decimal) of the oligo which aligns to the background sequence.
+		return PercentageObtained
+
+
+	# This checks to make sure all background fasta files indicated are present.
+	FastafilesInWD = glob.glob('*.fasta')
+	FafilesInWD = glob.glob('*.fa')
+
+	AllPossibleBackgroundFilesInWD = FastafilesInWD + FafilesInWD
+
+	MissingBackgroundFiles = []
+	for sbgf in BackgroundGenomeFiles:
+		if sbgf not in AllPossibleBackgroundFilesInWD:
+			MissingBackgroundFiles.append(sbgf)
+
+	if len(MissingBackgroundFiles) != 0:
+		print('Missing Background Files Identified')
+		print(MissingBackgroundFiles)
 		sys.exit()
 
-	ForwardPrimerColumn = []
-	for PPsets in SecondaryStructureFilteredPPsets:
-		ForwardPrimer = PPsets[0]
-		ForwardPrimerColumn.append(ForwardPrimer)
 
-	ProbeColumn = []
-	for PPsets in SecondaryStructureFilteredPPsets:
-		P = PPsets[1]
-		ProbeColumn.append(P)
+	OligoFastaFiles = []
 
-	ReversePrimerColumn = []
-	for PPsets in SecondaryStructureFilteredPPsets:
-		RP = PPsets[2]
-		ReversePrimerColumn.append(RP)
 
-	OverallScoreColumn = [p[6] for p in SecondaryStructureFilteredPPsets]
-	FPScoreColumn = [u[3] for u in SecondaryStructureFilteredPPsets]
-	PrScoreColumn = [q[4] for q in SecondaryStructureFilteredPPsets]
-	RPScoreColumn = [g[5] for g in SecondaryStructureFilteredPPsets]
+	SetNumberCounter = 0
+	SetNumberCounterList = []
+	for PPSetBC in SecondaryStructureFilteredPPsets:
+		
+		SetNumberCounterList.append(SetNumberCounter)
 
-	if len(OverallScoreColumn) != 0:
-		kjkjk = min(OverallScoreColumn)-1
+		ForwardPrimerFastaFile = open(str(SetNumberCounter)+'_FP.fasta','w')
+		ForwardPrimerFastaFile.write('>Oligo_Header_FP'+str(SetNumberCounter)+'\n')
+		ForwardPrimerFastaFile.write(PPSetBC[0]+'\n')
+		OligoFastaFiles.append(str(SetNumberCounter)+'_FP')
+		ForwardPrimerFastaFile.close()
 
-	adjustedScoreColumn = []
-	for mnm in OverallScoreColumn:
-		gjg = mnm - kjkjk
-		adjustedScoreColumn.append(gjg)
+		ProbePrimerFastaFile = open(str(SetNumberCounter)+'_PR.fasta','w')
+		ProbePrimerFastaFile.write('>Oligo_Header_PR'+str(SetNumberCounter)+'\n')
+		ProbePrimerFastaFile.write(PPSetBC[1]+'\n')
+		OligoFastaFiles.append(str(SetNumberCounter)+'_PR')
+		ProbePrimerFastaFile.close()
 
-	Nameofoutput = Targetsequencefile.split('.')[0]
+		ReversePrimerFastaFile = open(str(SetNumberCounter)+'_RP.fasta','w')
+		ReversePrimerFastaFile.write('>Oligo_Header_RP'+str(SetNumberCounter)+'\n')
+		ReversePrimerFastaFile.write(PPSetBC[2]+'\n')
+		OligoFastaFiles.append(str(SetNumberCounter)+'_RP')
+		ReversePrimerFastaFile.close()
 
-	DF = pd.DataFrame(data={'Forward Primer':ForwardPrimerColumn, 'Reverse Primer':ReversePrimerColumn, 'Probe':ProbeColumn, 'Forward Primer Score':FPScoreColumn, 'Probe Score':PrScoreColumn, 'Reverse Primer Score':RPScoreColumn ,'Final Score':adjustedScoreColumn}).sort_values(by=['Final Score'])
+		SetNumberCounter += 1
 
-	# Write to .xlsx (.csv might be more compatible)
-	print("Writing output to '{}'".format(Nameofoutput+"_Primers&Probes.xlsx"))
-	writer = pd.ExcelWriter(Nameofoutput+"_Primers&Probes.xlsx")
-	DF.to_excel(writer,"Sheet1")
-	writer.save()
 
-	if BackgroundCheckRequired == "yes":
-		if singleOrMultipleFiles == "n":
-			os.remove(defaultOutputFile)
+	Appendedfastaformat = []
+	for debug1 in OligoFastaFiles:
+		Appendedfastaformat.append(debug1+'.fasta')
 
-	print("RPA Primer and Probe Table Complete!")
+
+	#Append the oligo fasta files to the background file list ready to create the database 
+	BackgroundandOligoGenomeFiles = BackgroundGenomeFiles + Appendedfastaformat
+
+	MergedBackgroundFastaName = '{}_Merged_Background_Fasta.fasta'.format(RunName)
+
+	# Create Merged Background File ready for Database creation. 
+	MergedBackgroundFasta = open( MergedBackgroundFastaName,'w')
+	# Loop to create concatenate all possible background files
+	for bf in BackgroundandOligoGenomeFiles:
+
+		backgroundfileraw = open(bf,'r')
+		for bfrline in backgroundfileraw.readlines():
+			if bfrline != '\n':
+				MergedBackgroundFasta.write(bfrline)
+
+	MergedBackgroundFasta.close()
+
+
+	# Create BLAST Database
+	CreateDatabaseCommnad = 'makeblastdb -in {} -parse_seqids -dbtype nucl -out PrimedRPA_BLAST_Background_Seq_Database'.format(MergedBackgroundFastaName)
+	CreateDatabaseCommnadresult = subprocess.call([CreateDatabaseCommnad], stdout=subprocess.PIPE, shell=True,)
+
+
+	BLAST_DB_Name = '{}_BLAST_DB'.format(RunName)
+	# Move BLAST Database to dedicated directory
+	os.makedirs(BLAST_DB_Name)
+	mvdbcommand = 'mv PrimedRPA_BLAST_Background_Seq_Database* ./{}'.format(BLAST_DB_Name)
+	mvdbcommandresult = subprocess.call([mvdbcommand], stdout=subprocess.PIPE, shell=True,)
+
+
+	BLAST_Outputs_Name = '{}_BLAST_Outputs'.format(RunName)
+	# Blasting all primers & probes against the database created. 
+	os.makedirs(BLAST_Outputs_Name)
+	for olgiofile in OligoFastaFiles:
+		fastaoligofile = olgiofile + '.fasta'
+		BLASTSearchCommand = 'blastn -task "blastn-short" -query ./{0} -db ./{1}/PrimedRPA_BLAST_Background_Seq_Database -out ./{2}/{3}"_output.csv" -outfmt "10 sseqid bitscore evalue"'.format(fastaoligofile, BLAST_DB_Name, BLAST_Outputs_Name, olgiofile)
+		BLASTSearchCommandResult = subprocess.call([BLASTSearchCommand], stdout=subprocess.PIPE, shell=True,)
+
+
+	BLASTbackgroundcheckresultsFiles = glob.glob('./{}/*_output.csv'.format(BLAST_Outputs_Name))
+
+
+	ForwardPrimerList = []
+	ForwardPrimerScoreList = []
+	ProbeList = []
+	ProbeScoreList = []
+	ReversePrimerList = []
+	ReversePrimerScoreList = []
+	OverallScore = []
+
+
+
+	# Begining Scoring system for primer & probe sets.
+	for outputCSVSetNumber in SetNumberCounterList:
+
+		AssociatedPrimerSet = SecondaryStructureFilteredPPsets[outputCSVSetNumber]
+
+		FowardPrimerDataFrame = pd.read_csv('./{}/'.format(BLAST_Outputs_Name)+str(outputCSVSetNumber)+'_FP_output.csv', header=None)
+		ProbeDataFrame = pd.read_csv('./{}/'.format(BLAST_Outputs_Name)+str(outputCSVSetNumber)+'_PR_output.csv', header=None)
+		ReversePrimerDataFrame = pd.read_csv('./{}/'.format(BLAST_Outputs_Name)+str(outputCSVSetNumber)+'_RP_output.csv', header=None)
+
+
+		# Need to now update the function to account for the change in file name system
+		ForwardPrimerScore = BLASTCScoreGeneration(FowardPrimerDataFrame, AssociatedPrimerSet[0], outputCSVSetNumber, 'FP')
+		ProbeScore = BLASTCScoreGeneration(ProbeDataFrame, AssociatedPrimerSet[1], outputCSVSetNumber, 'PR')
+		ReversePrimerScore = BLASTCScoreGeneration(ReversePrimerDataFrame, AssociatedPrimerSet[2], outputCSVSetNumber, 'RP')
+
+		OverallScoreSetScore = (ForwardPrimerScore + ProbeScore + ReversePrimerScore)/3 #This totals the percentages and divides by 3 to get an overall score percentage. 
+
+		ForwardPrimerList.append(AssociatedPrimerSet[0])
+		ForwardPrimerScoreList.append(ForwardPrimerScore)
+		ProbeList.append(AssociatedPrimerSet[1])
+		ProbeScoreList.append(ProbeScore)
+		ReversePrimerList.append(AssociatedPrimerSet[2])
+		ReversePrimerScoreList.append(ReversePrimerScore)
+		OverallScore.append(OverallScoreSetScore)
+
+
+	Olig_Fasta_Name = '{}_Oligo_Fasta'.format(RunName)
+	os.makedirs(Olig_Fasta_Name)
+	for tidyup in Appendedfastaformat:
+		tucommand = 'mv {0} ./{1}'.format(tidyup, Olig_Fasta_Name)
+		tucommandresults = subprocess.call([tucommand], stdout=subprocess.PIPE, shell=True,)
+
+	# Final pipeline output 
+	PreFinalOutputDF = pd.DataFrame(data={'Forward Primer':ForwardPrimerList, 'Reverse Primer':ReversePrimerList, 'Probe':ProbeList, 'Forward Primer Score':ForwardPrimerScoreList, 'Probe Score':ProbeScoreList, 'Reverse Primer Score':ReversePrimerScoreList ,'Overall Set Score':OverallScore}).sort_values(by=['Overall Set Score'])
+
+	CutOffAdjustedOutput = PreFinalOutputDF[PreFinalOutputDF['Overall Set Score']<PriorBackgroundPercentageCutOff]
+	
+	DFShape = CutOffAdjustedOutput.shape
+
+	if DFShape == (0,7):
+		print("Number of sets after filtering by background binding: {:,} \n\n".format(DFShape[0]))
+
+
+		cutofffailoption = input("Do you wish to export the PrimedRPA sets which did not pass the background binding cut-off (yes/no): ")
+
+
+		if cutofffailoption == 'no':
+
+
+			#Clean-up 
+			AllNewFiles = glob.glob('{}*'.format(RunName))
+			FinalCleanUpFolder = '{}_Results'.format(RunName)
+			os.makedirs(FinalCleanUpFolder)
+			for thankyou in AllNewFiles:
+				thankyoucommand = 'mv {0} ./{1}'.format(thankyou, FinalCleanUpFolder)
+				thankyoucommandresult = subprocess.call([thankyoucommand], stdout=subprocess.PIPE, shell=True,) 
+
+			print('\n\nAnalysis Complete\n\n')
+
+			sys.exit()
+
+			
+		else:
+
+			print('\n\nCreating table containing sets above the background binding cut-off') # Potentially change this into a user operated option where they either click enter or dont.
+
+			PreFinalOutputDF.to_csv('{}_PrimedRPA_Output_Sets.csv'.format(RunName), columns=['Overall Set Score',"Forward Primer","Reverse Primer","Probe","Forward Primer Score", "Reverse Primer Score", "Probe Score"], index=False)
+
+			#Clean-up 
+			AllNewFiles = glob.glob('{}*'.format(RunName))
+			FinalCleanUpFolder = '{}_Results'.format(RunName)
+			os.makedirs(FinalCleanUpFolder)
+			for thankyou in AllNewFiles:
+				thankyoucommand = 'mv {0} ./{1}'.format(thankyou, FinalCleanUpFolder)
+				thankyoucommandresult = subprocess.call([thankyoucommand], stdout=subprocess.PIPE, shell=True,) 
+
+			print('\n\nAnalysis Complete\n\n')
+			sys.exit()
+
+
+	else:
+
+
+		print("Number of sets after filtering by background binding: {:,}".format(DFShape[0]))
+		CutOffAdjustedOutput.to_csv('{}_PrimedRPA_Output_Sets.csv'.format(RunName), columns=['Overall Set Score',"Forward Primer","Reverse Primer","Probe","Forward Primer Score", "Reverse Primer Score", "Probe Score"], index=False)
+
+		#Clean-up 
+		AllNewFiles = glob.glob('{}*'.format(RunName))
+		FinalCleanUpFolder = '{}_Results'.format(RunName)
+		os.makedirs(FinalCleanUpFolder)
+		for thankyou in AllNewFiles:
+			thankyoucommand = 'mv {0} ./{1}'.format(thankyou, FinalCleanUpFolder)
+			thankyoucommandresult = subprocess.call([thankyoucommand], stdout=subprocess.PIPE, shell=True,) 
+
+		print('\n\nAnalysis Complete\n\n')
+

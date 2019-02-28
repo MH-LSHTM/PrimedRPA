@@ -1,0 +1,51 @@
+This file will be read by the PrimedRPA Package and identify RPA compatible primers and probes according to the parameters you define. Please follow the instructions outlined below:
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+
+Important Note - Do not remove any of the “>” and write your input directly after this symbol ensuring there are no spaces between “>” and your text.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+
+Please state the run name below.
+
+>PrimedRPA_Run_18
+
+Please state the name of the input file in full. 
+>Input_Example_1.fasta
+
+If an initial alignment to identify conserved regions is being performed please indicate below the percentage of homology of the conserved target DNA which will be extracted from DNA. By default we recommend keep this at 99. If you do lower this percentage the primers and probes generated may not bind to all sequences in the input file.
+>100
+
+Desired Primer Length [TwistDx specify that the ideal RPA primers are between 30 to 35 nucleotides long]:
+>32
+
+Desired Probe Length [TwistDx specify that the ideal RPA probe is between 46 to 52 nucleotides long]:
+>10
+
+Below please insert your desired amplicon length. The shorter the fragment the faster the amplification. [TwistDx recommend an amplicon length between 200bp - 500bp]:
+>100
+
+Below please insert the minimum GC content for the primers and probes [The recommended GC content range is between 30%-70%]:
+>30
+
+Below please insert the maximum GC content for the primers and probes:
+>95
+ 
+Below please insert the tolerated length of a region which could cause self binding between primer and probes sets. e.g. 4bp region:
+>4
+
+Below please insert the tolerated length of a region which could form secondary structure. e.g. 5bp region:
+>10
+
+Please enter yes or no below to identify if you want to perform a background DNA binding check:
+>yes
+
+Please enter below the tolerated percentage of background binding by the primers and probe in the set. 
+
+>20
+
+Below please list the full names of the background files which you want to be checked. Please write each new file on a new line and in the same format as the one above. 
+
+>Test_Background_2.fasta
+>Test_Background_3.fasta
+
